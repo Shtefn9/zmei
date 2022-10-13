@@ -1,0 +1,93 @@
+from random import randint
+print('Ход компьютера:')
+x=randint(4,30)
+print(x)
+print('Ход компьютера:')
+x=x-randint(1,3)
+print(x)
+print('Ваш ход:')
+if (x==1):
+  print('Игра окончена')
+else:
+  print('Введите количество камней:')
+  z=int(input())
+  x=x-z
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Ход компьютера:')
+  x = x - randint(1, 3)
+  print(x)
+if (x <=1):
+  print('Игра окончена')
+else:
+  print('Введите количество камней:')
+  c = int(input())
+  x = x - c
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Ход компьютера:')
+  x = x - randint(1, 3)
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Введите количество камней:')
+  v = int(input())
+  x = x - v
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Ход компьютера:')
+  x = x - randint(1, 3)
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Введите количество камней:')
+  b = int(input())
+  x = x - b
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Ход компьютера:')
+  x = x - randint(1, 3)
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Введите количество камней:')
+  n = int(input())
+  x = x - n
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Ход компьютера:')
+  x = x - randint(1, 3)
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Введите количество камней:')
+  m = int(input())
+  x = x - m
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Ход компьютера:')
+  x = x - randint(1, 3)
+  print(x)
+if (x <= 1):
+  print('Игра окончена')
+else:
+  print('Введите количество камней:')
+  q = int(input())
+  x = x - q
+  print(x)
