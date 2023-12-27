@@ -1,0 +1,541 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include <iostream>
+#include <vector>
+#include <fstream>
+#include <locale>
+#include <string>
+#include <stack>
+#include <iterator>
+#include <algorithm>
+
+
+using namespace std;
+enum states { H, ID, NUM, ASGN, END, DLM, ERR };
+enum states CS = H;
+char c;
+
+vector<pair<string, string>> words; // парный вектор для хранения лексем: тип и значение
+int i = 0; // для навигации в массиве words
+
+vector<pair<string, string>> poliz(1000); // хранение постфиксной записи: идентификатор, значение
+int free_poz = 0;
+
+void put_lex(pair<string, string> l) {
+	poliz[free_poz] = l;
+	free_poz++;
+}
+void put_lex(pair<string, string> l, int place) {
+	poliz[place] = l;
+}
+void blank() {
+	free_poz++;
+}
+
+
+vector<string> variables; // записываем найденные переменные с помощью put_variables
+vector<int> var_values(1000); // значение переменных
+
+void put_variables(int j) { // семантический анализ: описана ли ранее переменная
+	vector<string>::iterator it = find(variables.begin(), variables.end(), words[i].second); // находим номер элемента в векторе
+	if (j == 0) { // если впервые описана в присваивании или в read
+		if (it == variables.end()) // если её в векторе нет
+			variables.push_back(words[i].second); // добавляем в вектор
+	}
+	else {
+		if (it == variables.end()) { // если она до этого не описана
+			cout << "Семантическая ошибка: переменная '" << words[i].second << "' не инициализирована!";
+			exit(0);
+		}
+	}
+}
+
+vector<int>initialized(1000); // хранение информации о инициализации переменной
+
+ofstream fout1("answer_values.txt");
+ofstream fout2("tracing.txt");
+
+void print_stack_top(stack<int> st) {// принимает стек и вывводит верхний элемент
+	if (!st.empty()) {
+		fout2 << st.top() << endl;
+	}
+	else {
+		fout2<< "Пустой стек\n";
+	}
+}
+
+void execute() { // выполнение постфиксной записи
+	pair<string, string> r;
+	stack <int> st;
+	int index = 0;
+	int size = free_poz;
+	while (index < size) {// обработка лексем
+		r = poliz[index];
+		string f = r.first;
+		if (f == "POLIZ_ADDRESS") {// если лексима - адрес переменной
+			vector<string>::iterator it = find(variables.begin(), variables.end(), r.second); // нашли номер переменной
+			st.push(it - variables.begin()); // заносим в стек индекс, в какой ячейке массива он хранится
+			print_stack_top(st);
+		}
+		else if (f == "LEX_NUM" || f == "POLIZ_LABEL") { // лексема - число или метка
+			st.push(stoi(r.second)); // преобразовали строки в число, запись в стек
+			print_stack_top(st);
+		}
+		else if (f == "LEX_ID") { // лексема идентификатор переменной
+			vector<string>::iterator it = find(variables.begin(), variables.end(), r.second); // нашли номер переменной
+
+			if (initialized[it - variables.begin()] == 1) { // проверка на инициализацию
+				st.push(var_values[it - variables.begin()]);
+			}
+			else {
+				cout << "Переменная " << r.second << ' ' << " не иннициализирована!";
+				exit(0);
+			}
+			print_stack_top(st);// вывод верхнего элемента стека в файл
+		}
+		else if (f == "POLIZ_GO") { //условный переход переход к указанному индексу в постфиксной записи
+			index = st.top() - 1;
+			st.pop();
+			print_stack_top(st);
+		}
+		else if (f == "POLIZ_FGO") { // то же самое, но если верхний элемент стека = 0
+			int m = st.top();
+			st.pop();
+			print_stack_top(st);
+			if (!st.top())
+				index = m - 1;
+			st.pop();
+			print_stack_top(st);
+		}
+		else if (f == "LEX_WRITE") {//вывод верхнего элемента стека
+			if (!st.empty()) {
+				cout << "Вывод: " << st.top() << endl;
+				fout1 << st.top() << endl;
+			}
+			else cout << "Стек пустой!\n";
+		
+			print_stack_top(st);
+			st.pop();
+			print_stack_top(st);
+		}
+		else if (f == "LEX_READ") {//запрос значений для переменной и запись в массив
+			int k;
+			int m = st.top(); // номер переменной в массиве variables, по нему сможем записать значение в массив var_values
+			st.pop();
+			print_stack_top(st);
+			cout << "Введите значение переменной " << variables[m] << ": ";
+			cin >> k;
+			var_values[m] = k;
+			initialized[m] = 1;
+		}
+		else if (f == "LEX_PLUS") {//сложение
+			int sum = 0;
+			for (int k = 0; k < 2; k++) {
+				sum += st.top();
+				st.pop();
+				print_stack_top(st);
+			}
+			st.push(sum);
+			print_stack_top(st);
+		}
+		else if (f == "LEX_TIMES") {//умножение
+			int proiz = 1;
+			for (int k = 0; k < 2; k++) {
+				proiz *= st.top();
+				st.pop();
+				print_stack_top(st);
+			}
+			st.push(proiz);
+			print_stack_top(st);
+		}
+		else if (f == "LEX_EQ") {// сравнение элементов - равно
+			int k = st.top();
+			st.pop();
+			print_stack_top(st);
+			int m = st.top();
+			st.pop();
+			print_stack_top(st);
+			st.push(m == k);
+			print_stack_top(st);
+		}
+		else if (f == "LEX_LSS") {//меньше
+			int k = st.top();
+			st.pop();
+			print_stack_top(st);
+			int m = st.top();
+			st.pop();
+			print_stack_top(st);
+			st.push(m < k);
+			print_stack_top(st);
+		}
+		else if (f == "LEX_GTR") {//больше
+			int k = st.top();
+			st.pop();
+			print_stack_top(st);
+			int m = st.top();
+			st.pop();
+			print_stack_top(st);
+			st.push(m > k);
+			print_stack_top(st);
+		}
+		else if (f == "LEX_ASSIGN") {//присваивание значений: значение переменной с индексом
+			int k = st.top();
+			st.pop();
+			print_stack_top(st);
+			int m = st.top();
+			st.pop();
+			print_stack_top(st);
+			var_values[m] = k;
+			initialized[m] = 1;
+		}
+		index++;
+	}
+	cout << "Интерпретация закончена!";
+}
+
+// лексический анализатор
+void lexeme(FILE* fin) { 
+	c = fgetc(fin); // читаем символ
+	while (!feof(fin)) { 
+		switch (CS) {
+		case H: {
+			if (c == ' ' || c == '\t' || c == '\n') {// пока пробельные символы - пропускаем
+				c = fgetc(fin);
+			}
+
+			else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) // нашли идентификатор
+				CS = ID;
+
+			else if (c >= '0' && c <= '9' || c == '-') // нашли цифру
+				CS = NUM;
+
+			else if (c == ':') // нашли возможное присваивание
+				CS = ASGN;
+
+			else if (c == '#') // признак конца строки
+				CS = END;
+			else
+				CS = DLM; // иной символ
+			break;
+		}
+		case ID: {
+			string cur = "";
+			cur.push_back(c); // сюда накапливаем символы слова
+			c = fgetc(fin);
+			while ((c >= 'a' && c <= 'z') || (c>='0' && c<='9') || (c>='A' && c<='Z')) {
+				cur.push_back(c);
+				c = fgetc(fin);
+			}
+			if (cur == "program" || cur == "begin" || cur == "end" || cur == "while" || cur == "do" || cur=="read" || cur == "write") {
+				words.push_back(make_pair("KWORD", cur));
+				CS = H;
+			}
+			else if (cur != "if") {
+				words.push_back(make_pair("ID", cur));
+				CS = H;
+			}
+			else CS = ERR;
+			break;
+		}
+		case NUM: {
+			string cur = "";
+			cur.push_back(c);
+			c = fgetc(fin);
+			while (c >= '0' && c <= '9') {
+				cur.push_back(c);
+				c = fgetc(fin);
+			}
+			
+			if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) && cur != "-") {
+				words.push_back(make_pair("NUM", cur));
+				CS = H;
+			}
+			else CS = ERR;
+			break;
+		}
+		case ASGN: {
+			c = fgetc(fin);
+			if (c == '=') { // после : только =
+				words.push_back(make_pair("ASGN", ":="));
+				CS = H;
+			}
+			else CS = ERR;
+
+			c = fgetc(fin);
+			break;
+		}
+		case END: {
+			if ((c=fgetc(fin))!=-1)
+				CS = ERR;
+			else CS = H;
+			break;
+		}
+		case DLM: { // иной символ
+			string cur = "";
+			if (c == '(' || c == ')' || c == '+' || c == ';' || c == '=' || c == '<' || c == '>' || c == '*') { // если он подходит грамматике
+				cur.push_back(c);
+				words.push_back(make_pair("DLM", cur));
+				CS = H;
+				c = fgetc(fin);
+			}
+			else {
+				CS = ERR; // иначе символ не подходит грамматике --> ошибка
+			}
+			break;
+		}
+		case ERR: {
+			cout << "Ошибка в процессе лексического анализа.";
+			exit(0);
+		}
+		}
+	}
+
+	if (words.size() == 0) {
+		cout << "Лексем не найдено!";
+		exit(0);
+	}
+	cout << "Найденные Лексемы:\n";
+	for (int i = 0; i < words.size(); i++) {
+		cout <<"'"<<  words[i].second << "'; ";
+	}
+	cout << "\n\n";
+}
+
+void mistake() {
+	cout << "Ошибка при синтаксическом анализе.";
+	exit(0);
+}
+
+bool check() { // проверка выхода за границы массива words
+	return (i < words.size());
+}
+
+void P(void);
+void B(void);
+void S(void);
+void E(void);
+void E1(void);
+void T(void);
+void F(void);
+
+void P() {
+	if (check() && "program" == words[i].second) {
+		i++;
+		B();
+	}
+	else {
+		mistake();
+	}
+}
+
+void B() {
+	if (check() && "begin" == words[i].second) {
+		i++;
+		S();
+		while (check() && ";" == words[i].second) {
+			i++;
+			S();
+		}
+		if (check() && "end" == words[i].second) {
+			i++;
+		}
+		else {
+			mistake();
+		}
+	}
+	else {
+		mistake();
+	}
+}
+
+void S() {
+	if (check() && words[i].second == "while") {
+		int pl0 = free_poz;
+		i++;
+		E();
+		int pl1 = free_poz;
+		blank();
+		put_lex(make_pair("POLIZ_FGO", "!F"));
+		if (check() && words[i].second == "do") {
+			i++;
+			S();
+			put_lex(make_pair("POLIZ_LABEL", to_string(pl0)));
+			put_lex(make_pair("POLIZ_GO", "!"));
+			put_lex(make_pair("POLIZ_LABEL", to_string(free_poz)), pl1);
+		}
+		else {
+			mistake();
+		}
+	}
+	else if (check() && words[i].second == "begin") {
+		i++;
+		S();
+		while (check() && words[i].second == ";") {
+			i++;
+			S();
+		}
+		if (check() && words[i].second == "end") {
+			i++;
+		}
+		else {
+			mistake();
+		}
+	}
+	else if (check() && words[i].second == "read") {
+		i++;
+		if (check() && words[i].second == "(") {
+			i++;
+			if (check() && words[i].first == "ID") {
+				put_lex(make_pair("POLIZ_ADDRESS", words[i].second));
+				put_lex(make_pair("LEX_READ", "R"));
+
+				put_variables(0);
+
+				i++;
+				if (check() && words[i].second == ")")
+					i++;
+				else {
+					mistake();
+				}
+			}
+			else {
+				mistake();
+			}
+		}
+		else {
+			mistake();
+		}
+	}
+	else if (check() && words[i].second == "write") {
+		i++;
+		if (check() && words[i].second == "(") {
+			i++;
+			E1();
+			put_lex(make_pair("LEX_WRITE", "W"));
+			if (check() && words[i].second == ")") {
+				i++;
+			}
+			else {
+				mistake();
+			}
+		}
+		else {
+			mistake();
+		}
+	}
+	else {
+		if (check() && words[i].first == "ID") {
+
+			put_variables(0);
+
+			put_lex(make_pair("POLIZ_ADDRESS", words[i].second));
+			i++;
+			if (check() && words[i].first == "ASGN") {
+
+				i++;
+				E1();
+				put_lex(make_pair("LEX_ASSIGN", ":="));
+			}
+			else {
+				mistake();
+			}
+		}
+		else {
+			mistake();
+		}
+	}
+}
+
+void E() {
+	E1();
+	if (check()) {
+		string g = words[i].second;
+		if (g == "=" || g == "<" || g == ">") {
+			i++;
+			E1();
+			if (g == "=")
+				put_lex(make_pair("LEX_EQ", "="));
+			else if (g == "<")
+				put_lex(make_pair("LEX_LSS", "<"));
+			else if (g == ">")
+				put_lex(make_pair("LEX_GTR", ">"));
+		}
+		else {
+			mistake();
+		}
+	}
+	else {
+		mistake();
+	}
+}
+
+void E1() {
+	T();
+	while (check() && words[i].second == "+") {
+		i++;
+		T();
+		put_lex(make_pair("LEX_PLUS", "+"));
+	}
+}
+
+void T() {
+	F();
+	while (check() && words[i].second == "*") {
+		i++;
+		F();
+		put_lex(make_pair("LEX_TIMES", "*"));
+	}
+}
+
+void F(){
+	if (check() && words[i].first == "ID") {
+		put_variables(1);
+
+		put_lex(make_pair("LEX_ID", words[i].second));
+		i++;
+	}
+	else if (check() && words[i].first == "NUM") {
+		put_lex(make_pair("LEX_NUM", words[i].second));
+		i++;
+	}
+	else if (check() && words[i].second == "(") {
+		i++;
+		E1();
+		if (check() && words[i].second == ")") {
+			i++;
+		}
+		else {
+			mistake();
+		}
+	}
+	else {
+		mistake();
+	}
+}
+
+
+int main() {
+	setlocale(LC_ALL, "RU");
+
+	FILE* fin = fopen("data1.txt", "r");
+
+	if (fin == NULL) { // проверка на наличие файла
+		cout << "Файл не найден.";
+		return 0;
+	}
+
+	lexeme(fin); // разбиваем текст на лексемы
+
+	P(); // запускаем синтаксический анализатор
+
+	ofstream fout("poliz.txt"); // файл для записи ПОЛИЗа
+	cout << "ПOЛИЗ данной записи:\n";
+	for (int w = 0; w < free_poz; w++) {
+		//cout << poliz[w].first << ' ' << poliz[w].second << endl;
+		cout << poliz[w].second << " ";
+		fout << poliz[w].second << endl;
+	}
+	cout << endl;
+
+	cout << "\nНачинаем интерпретацию:" << endl;
+	execute();
+}
